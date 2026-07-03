@@ -1,9 +1,11 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Brand } from '@/constants/theme';
+import { initIdentity } from '@/lib/auth';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,6 +24,9 @@ const ParabolicTheme = {
 };
 
 export default function RootLayout() {
+  useEffect(() => {
+    initIdentity(); // deep links can land outside the tabs — identity boots here
+  }, []);
   return (
     <ThemeProvider value={ParabolicTheme}>
       <StatusBar style="light" />

@@ -143,5 +143,10 @@ async function setAuth(a: AuthSession): Promise<void> {
 export async function logout(): Promise<void> {
   state.auth = null;
   await removeItem(AUTH_KEY);
+  // Mint a fresh guest identity: the old trading id belongs to a credentialed
+  // account, which can't chat/trade without its token. Signed out = clean guest.
+  state.guestId = Crypto.randomUUID();
+  await setItem(GUEST_KEY, state.guestId);
+  registerGuest(state.guestId);
   emit();
 }

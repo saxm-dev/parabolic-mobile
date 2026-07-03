@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ChatPanel } from '@/components/chat-panel';
 import { ProbChart } from '@/components/prob-chart';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
@@ -15,9 +16,17 @@ import {
   type HistoryPoint,
   type Play,
 } from '@/lib/api';
+import { fetchChat } from '@/lib/chat';
 
 const POLL_MS = 10_000;
-type Tab = 'gamecast' | 'boxscore';
+type Tab = 'gamecast' | 'boxscore' | 'chat';
+type Timeframe = 'LIVE' | '1H' | '2H' | '12H' | '1D';
+const TF_MS: Record<Exclude<Timeframe, 'LIVE'>, number> = {
+  '1H': 3_600_000,
+  '2H': 7_200_000,
+  '12H': 43_200_000,
+  '1D': 86_400_000,
+};
 
 function fmtStart(iso: string): string {
   const d = new Date(iso);
@@ -45,16 +54,23 @@ export default function GameDetailScreen() {
   const [game, setGame] = useState<GameDetail | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [tab, setTab] = useState<Tab>('gamecast');
+  const [tf, setTf] = useState<Timeframe>('LIVE');
+  const [chatters, setChatters] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [g, h] = await Promise.all([fetchGameDetail(id), fetchOracleHistory(id)]);
+      const [g, h, msgs] = await Promise.all([
+        fetchGameDetail(id),
+        fetchOracleHistory(id),
+        fetchChat(id).catch(() => []),
+      ]);
       if (mounted.current) {
         setGame(g);
         setHistory(h);
+        setChatters(new Set(msgs.filter((m) => m.type === 'user').map((m) => m.username)).size);
         setError(null);
       }
     } catch {
@@ -173,20 +189,58 @@ export default function GameDetailScreen() {
             </View>
 
             <ProbChart
-              history={history}
+              history={
+                tf === 'LIVE' ? history : history.filter((h) => h.t >= Date.now() - TF_MS[tf])
+              }
               homeAbbr={game.home.abbreviation}
               awayAbbr={game.away.abbreviation}
             />
 
+            <View style={styles.tfRow}>
+              {(['1H', '2H', '12H', '1D', 'LIVE'] as Timeframe[]).map((t) => (
+                <Pressable key={t} onPress={() => setTf(t)} hitSlop={6}>
+                  <View style={[styles.tfChip, tf === t && { backgroundColor: Brand.cta }]}>
+                    <ThemedText
+                      type="smallBold"
+                      style={{
+                        color: tf === t ? Brand.ctaText : Brand.mute,
+                        fontSize: 12,
+                        lineHeight: 16,
+                      }}>
+                      {t}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable onPress={() => setTab('chat')} style={styles.chatTeaser}>
+              <ThemedText type="small" style={{ color: Brand.dim, flex: 1 }}>
+                💬 {chatters > 0 ? `${chatters} ${chatters === 1 ? 'user' : 'users'} chatting` : 'Game chat'}
+              </ThemedText>
+              <View style={styles.joinChatBtn}>
+                <ThemedText type="smallBold" style={{ color: Brand.white, fontSize: 13 }}>
+                  Join chat
+                </ThemedText>
+              </View>
+            </Pressable>
+
             <View style={styles.tabsRow}>
               <TabButton label="Gamecast" active={tab === 'gamecast'} onPress={() => setTab('gamecast')} />
               <TabButton label="Box Score" active={tab === 'boxscore'} onPress={() => setTab('boxscore')} />
+              <TabButton label="Chat" active={tab === 'chat'} onPress={() => setTab('chat')} />
             </View>
 
             {tab === 'gamecast' ? (
               <Gamecast plays={game.plays ?? []} game={game} />
-            ) : (
+            ) : tab === 'boxscore' ? (
               <BoxScore teams={game.boxscore?.teams ?? []} game={game} />
+            ) : (
+              <ChatPanel
+                gameId={game.id}
+                homeAbbr={game.home.abbreviation}
+                awayAbbr={game.away.abbreviation}
+              />
             )}
           </>
         )}
@@ -368,6 +422,31 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   tabsRow: { flexDirection: 'row', gap: Spacing.four },
+  tfRow: { flexDirection: 'row', gap: Spacing.two, justifyContent: 'flex-end' },
+  tfChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: Brand.chip,
+  },
+  chatTeaser: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: Brand.card,
+    borderColor: Brand.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingLeft: Spacing.three,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+  joinChatBtn: {
+    backgroundColor: Brand.surface,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
   playRow: {
     flexDirection: 'row',
     alignItems: 'center',
