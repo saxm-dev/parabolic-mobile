@@ -99,3 +99,52 @@ export async function fetchLeaderboard(sort: 'points' | 'pnl' = 'points'): Promi
   const data = await api<{ leaderboard: LeaderboardEntry[] }>(`/leaderboard?sort=${sort}`);
   return data.leaderboard ?? [];
 }
+
+export interface Play {
+  id: string;
+  text: string;
+  shortText: string;
+  clock: string;
+  period: number;
+  periodDisplay: string;
+  homeScore: number;
+  awayScore: number;
+  scoringPlay: boolean;
+  scoreValue: number;
+  teamId: string;
+  wallclock: string;
+  homeWinPct: number | null;
+}
+
+export interface BoxStat {
+  name: string;
+  displayName: string;
+  value: string;
+}
+
+export interface BoxTeam {
+  team: string;
+  stats: BoxStat[];
+}
+
+export interface GameDetail extends Game {
+  plays: Play[];
+  boxscore: { teams?: BoxTeam[]; players?: unknown } | null;
+}
+
+export interface HistoryPoint {
+  t: number;
+  /** index price (oracle fair value), 0..1 home win prob */
+  ip: number;
+  /** mark price, 0..1 home win prob */
+  mp: number;
+}
+
+export async function fetchGameDetail(id: string): Promise<GameDetail> {
+  return api<GameDetail>(`/games/${id}`);
+}
+
+export async function fetchOracleHistory(id: string): Promise<HistoryPoint[]> {
+  const data = await api<{ history: HistoryPoint[] }>(`/oracle/${id}/history`);
+  return data.history ?? [];
+}

@@ -1,9 +1,8 @@
-import { DarkTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
 import { Brand } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -22,12 +21,15 @@ const ParabolicTheme = {
   },
 };
 
-export default function TabLayout() {
+export default function RootLayout() {
   return (
     <ThemeProvider value={ParabolicTheme}>
       <StatusBar style="light" />
       <AnimatedSplashOverlay />
-      <AppTabs />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Brand.bg } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="game/[id]" />
+      </Stack>
     </ThemeProvider>
   );
 }

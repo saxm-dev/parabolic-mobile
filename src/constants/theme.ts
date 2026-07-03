@@ -25,6 +25,15 @@ export const Brand = {
   surface: '#11141a',
   border: '#181b22',
   border2: '#1f2329',
+  // Mobile design language (Figma "Visual Exploration 03")
+  sideHome: '#7cc0f4', // home team accent (blue)
+  sideAway: '#e9a7f7', // away team accent (pink)
+  drawGrey: '#8b9099',
+  lime: '#d8f65f',
+  cta: '#ffffff', // primary CTA pills are white with dark text
+  ctaText: '#0b0d11',
+  chip: '#15171c',
+  livePill: '#22c55e',
 } as const;
 
 const carbon = {
