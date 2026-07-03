@@ -1,3 +1,10 @@
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from '@expo-google-fonts/inter';
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -9,7 +16,6 @@ import { initIdentity } from '@/lib/auth';
 
 SplashScreen.preventAutoHideAsync();
 
-// Dark-only: carbon surfaces + mint accent, regardless of system scheme.
 const ParabolicTheme = {
   ...DarkTheme,
   colors: {
@@ -24,9 +30,23 @@ const ParabolicTheme = {
 };
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
   useEffect(() => {
     initIdentity(); // deep links can land outside the tabs — identity boots here
   }, []);
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
+
   return (
     <ThemeProvider value={ParabolicTheme}>
       <StatusBar style="light" />
@@ -34,6 +54,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Brand.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="game/[id]" />
+        <Stack.Screen name="trade/[id]" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>
   );

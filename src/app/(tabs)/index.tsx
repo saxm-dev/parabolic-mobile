@@ -1,208 +1,331 @@
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  SectionList,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SvgXml } from 'react-native-svg';
 
-import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, Brand, Spacing } from '@/constants/theme';
+import { logoWordmark } from '@/assets/figma-icons';
+import { Icon, type IconName } from '@/components/icon';
+import { Txt } from '@/components/txt';
+import { Brand, Radii } from '@/constants/theme';
 import { useAccount } from '@/hooks/use-account';
 import { useIdentity } from '@/hooks/use-identity';
 import { fetchGames, type Game, type Position } from '@/lib/api';
 
 const POLL_MS = 15_000;
+const NAV_SPACE = 108; // floating nav clearance
 
-/** Seasonal sport ordering (mirrors web home page). */
 const SPORT_ORDER = ['wcup', 'mlb', 'nfl', 'nba', 'ncaam', 'nhl', 'mls'];
-const SPORT_LABEL: Record<string, string> = {
-  wcup: 'World Cup',
-  mlb: 'Baseball',
-  nfl: 'Football',
-  nba: 'Basketball',
-  ncaam: 'College Basketball',
-  nhl: 'Hockey',
-  mls: 'Soccer',
-};
-const SPORT_ICON: Record<string, string> = {
-  wcup: '⚽',
-  mlb: '⚾',
-  nfl: '🏈',
-  nba: '🏀',
-  ncaam: '🏀',
-  nhl: '🏒',
-  mls: '⚽',
+const SPORT_CHIP: Record<string, { label: string; icon?: IconName }> = {
+  nfl: { label: 'Football', icon: 'chipFootball' },
+  wcup: { label: 'World Cup', icon: 'chipSoccer' },
+  mls: { label: 'Soccer', icon: 'chipSoccer' },
+  nba: { label: 'Basketball', icon: 'chipBasketball' },
+  ncaam: { label: 'Basketball', icon: 'chipBasketball' },
+  mlb: { label: 'Baseball' },
+  nhl: { label: 'Hockey' },
 };
 
-function isLive(g: Game) {
-  return g.status === 'live' || g.status === 'in';
-}
-function isUpcoming(g: Game) {
-  return g.status === 'scheduled' || g.status === 'pre' || g.pregame;
-}
-
-function fmtStart(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  const tomorrow = new Date(now.getTime() + 86_400_000);
-  const isTomorrow = d.toDateString() === tomorrow.toDateString();
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (sameDay) return `Today at ${time}`;
-  if (isTomorrow) return `Tomorrow at ${time}`;
-  const day = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-  return `${day} at ${time}`;
-}
+const isLive = (g: Game) => g.status === 'live' || g.status === 'in';
+const isUpcoming = (g: Game) => g.status === 'scheduled' || g.status === 'pre' || g.pregame;
 
 function fmtUsd(n: number, digits = 2): string {
-  const sign = n < 0 ? '-' : '';
-  return `${sign}$${Math.abs(n).toLocaleString(undefined, {
+  const s = n < 0 ? '-' : '';
+  return `${s}$${Math.abs(n).toLocaleString(undefined, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}`;
 }
-
-/** Home win probability 0..1 from the oracle (mark first, index fallback). */
+function fmtStart(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return `Today at ${t}`;
+  if (d.toDateString() === new Date(now.getTime() + 864e5).toDateString()) return `Tomorrow at ${t}`;
+  return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${t}`;
+}
 function homeProb(g: Game): number | null {
   const o = g.oracle;
   if (!o) return null;
   const p = o.markPrice > 0 ? o.markPrice : o.indexPrice;
-  if (!p || p <= 0 || p >= 1) return null;
-  return p;
+  return p > 0 && p < 1 ? p : null;
 }
-
-function greeting(name?: string | null): string {
+function greeting() {
   const h = new Date().getHours();
-  const base = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  return name ? `${base}, ${name}` : base;
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
-  const p = homeProb(game);
-  const homePct = p == null ? null : Math.round(p * 100);
-  const awayPct = homePct == null ? null : 100 - homePct;
-  const live = isLive(game);
-  const showScores = live || game.status === 'final';
-
+// ── Header ──────────────────────────────────────────────────────────────────
+function Header({ value, onAvatar }: { value: number | null; onAvatar: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
-      <View style={styles.cardTop}>
-        <ThemedText type="small" style={styles.leagueLabel}>
-          {game.leagueDisplay.toUpperCase()}
-        </ThemedText>
-        {live && (
-          <View style={styles.livePill}>
-            <ThemedText type="smallBold" style={{ color: '#fff', fontSize: 12, lineHeight: 16 }}>
-              LIVE
-            </ThemedText>
+    <View style={s.header}>
+      <SvgXml xml={logoWordmark} width={92} height={16} />
+      <View style={s.headerRight}>
+        <View style={s.balancePill}>
+          <View style={s.coin} />
+          <Txt variant="balance">{value == null ? '—' : fmtUsd(value)}</Txt>
+          <View style={s.plusBtn}>
+            <Icon name="plus" size={12} />
           </View>
-        )}
+        </View>
+        <Pressable onPress={onAvatar} style={s.avatar} hitSlop={6}>
+          <Image source={{ uri: 'https://i.pravatar.cc/64' }} style={s.avatarImg} />
+        </Pressable>
       </View>
-
-      <ThemedText style={styles.matchTitle} numberOfLines={1}>
-        {game.away.name} vs. {game.home.name}
-      </ThemedText>
-
-      <View style={styles.scoreRow}>
-        <View style={styles.sideCol}>
-          <Image source={{ uri: game.away.logo }} style={styles.flag} contentFit="contain" />
-          {showScores && <ThemedText style={styles.score}>{game.away.score}</ThemedText>}
-        </View>
-
-        <View style={styles.centerCol}>
-          <ThemedText type="small" style={{ color: Brand.dim, textAlign: 'center' }}>
-            {live ? game.statusDetail : fmtStart(game.startTime)}
-          </ThemedText>
-        </View>
-
-        <View style={[styles.sideCol, { flexDirection: 'row-reverse' }]}>
-          <Image source={{ uri: game.home.logo }} style={styles.flag} contentFit="contain" />
-          {showScores && <ThemedText style={styles.score}>{game.home.score}</ThemedText>}
-        </View>
-      </View>
-
-      {homePct != null && awayPct != null && (
-        <View style={styles.probRow}>
-          <ThemedText type="smallBold" style={{ color: Brand.sideAway, minWidth: 80 }}>
-            {game.away.abbreviation} {awayPct}%
-          </ThemedText>
-          <View style={styles.probTrack}>
-            <View style={{ flex: awayPct, backgroundColor: Brand.sideAway, borderRadius: 2 }} />
-            <View style={{ flex: homePct, backgroundColor: Brand.sideHome, borderRadius: 2 }} />
-          </View>
-          <ThemedText
-            type="smallBold"
-            style={{ color: Brand.sideHome, minWidth: 80, textAlign: 'right' }}>
-            {homePct}% {game.home.abbreviation}
-          </ThemedText>
-        </View>
-      )}
-    </Pressable>
+    </View>
   );
 }
 
-function OpenBetCard({
-  pos,
-  game,
-  onPress,
+// ── Greeting (3-line headline) ────────────────────────────────────────────────
+function Greeting({
+  name,
+  pnl,
+  betCount,
+  openCount,
+  hasBets,
+  liveCount,
 }: {
-  pos: Position;
-  game: Game | undefined;
-  onPress: () => void;
+  name: string | null;
+  pnl: number;
+  betCount: number;
+  openCount: number;
+  hasBets: boolean;
+  liveCount: number;
 }) {
+  return (
+    <View style={s.greeting}>
+      <Txt variant="display">
+        {greeting()}
+        {name ? `, ${name}` : ''}
+      </Txt>
+      {hasBets ? (
+        <>
+          <View style={s.greetLine}>
+            <Txt variant="display" o={0.5}>
+              You’re
+            </Txt>
+            <Txt variant="display" color={pnl >= 0 ? Brand.green : Brand.red}>
+              {pnl >= 0 ? '+' : ''}
+              {fmtUsd(pnl, 0)}
+            </Txt>
+            <View style={s.fromPill}>
+              <Txt variant="capsLg" color={Brand.offWhite} o={0.9} upper>
+                From {betCount} {betCount === 1 ? 'bet' : 'bets'}
+              </Txt>
+            </View>
+          </View>
+          <Txt variant="display">
+            {openCount} open {openCount === 1 ? 'bet' : 'bets'} still in play
+          </Txt>
+        </>
+      ) : (
+        <Txt variant="display" o={0.5}>
+          {liveCount > 0
+            ? `${liveCount} ${liveCount === 1 ? 'game' : 'games'} live right now`
+            : 'Markets open before kickoff'}
+        </Txt>
+      )}
+    </View>
+  );
+}
+
+// ── Open-bet card ─────────────────────────────────────────────────────────────
+function OpenBetCard({ pos, game, onPress }: { pos: Position; game?: Game; onPress: () => void }) {
   const team = game ? (pos.side === 'home' ? game.home : game.away) : null;
   const up = pos.pnl >= 0;
   return (
-    <Pressable onPress={onPress} style={styles.betCard}>
-      <View style={styles.betCardTeam}>
-        {team && <Image source={{ uri: team.logo }} style={styles.betFlag} contentFit="contain" />}
-        <ThemedText numberOfLines={1} style={{ color: Brand.white, fontWeight: '600', flex: 1 }}>
+    <Pressable onPress={onPress} style={s.betCard}>
+      <View style={s.betTeam}>
+        {team && <Image source={{ uri: team.logo }} style={s.betFlag} contentFit="contain" />}
+        <Txt variant="label" numberOfLines={1}>
           {team?.name ?? pos.side.toUpperCase()}
-        </ThemedText>
+        </Txt>
       </View>
-      <ThemedText type="smallBold" style={{ color: up ? Brand.primary : Brand.red, fontSize: 17 }}>
-        {up ? '+' : ''}
-        {fmtUsd(pos.pnl)}
-      </ThemedText>
-      <View style={styles.betPctPill}>
-        <ThemedText type="smallBold" style={{ color: up ? Brand.primary : Brand.red, fontSize: 12 }}>
+      <View style={{ gap: 4 }}>
+        <Txt variant="pnl" color={up ? Brand.green : Brand.red}>
           {up ? '+' : ''}
-          {pos.roe.toFixed(1)}%
-        </ThemedText>
+          {fmtUsd(pos.pnl)}
+        </Txt>
+        <View style={s.betPctPill}>
+          <Txt variant="pctPill" color={Brand.pctPillText}>
+            {up ? '+' : ''}
+            {pos.roe.toFixed(1)}%
+          </Txt>
+        </View>
       </View>
     </Pressable>
   );
 }
 
-type Section = { title: string | null; data: Game[] };
+// ── Sport chips ───────────────────────────────────────────────────────────────
+function Chip({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: IconName;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[s.chip, active && s.chipActive]}>
+      {icon && <Icon name={icon} size={16} opacity={active ? 0.8 : 0.4} />}
+      <Txt variant="body" o={active ? 1 : 0.5}>
+        {label}
+      </Txt>
+    </Pressable>
+  );
+}
 
+// ── Game card ────────────────────────────────────────────────────────────────
+function SideCol({
+  logo,
+  score,
+  abbr,
+  pct,
+  pctColor,
+  align,
+  showScore,
+}: {
+  logo: string;
+  score: number;
+  abbr: string;
+  pct: number | null;
+  pctColor: string;
+  align: 'left' | 'right';
+  showScore: boolean;
+}) {
+  const flagScore = (
+    <View style={s.flagScore}>
+      <Image source={{ uri: logo }} style={s.cardFlag} contentFit="contain" />
+      {showScore && <Txt variant="score">{score}</Txt>}
+    </View>
+  );
+  return (
+    <View style={[s.sideCol, { alignItems: align === 'left' ? 'flex-start' : 'flex-end' }]}>
+      {align === 'left' ? flagScore : <View style={s.flagScoreRev}>{flagScore}</View>}
+      <View style={s.sideMeta}>
+        {align === 'left' ? (
+          <>
+            <Txt variant="label">{abbr}</Txt>
+            {pct != null && (
+              <Txt variant="pct" color={pctColor}>
+                {pct}%
+              </Txt>
+            )}
+          </>
+        ) : (
+          <>
+            {pct != null && (
+              <Txt variant="pct" color={pctColor}>
+                {pct}%
+              </Txt>
+            )}
+            <Txt variant="label">{abbr}</Txt>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
+  const live = isLive(game);
+  const p = homeProb(game);
+  const homePct = p == null ? null : Math.round(p * 100);
+  const awayPct = homePct == null ? null : 100 - homePct;
+  const showScore = live || game.status === 'final';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[s.card, live ? s.cardLive : s.cardIdle]}>
+      {live && (
+        <LinearGradient
+          colors={['rgba(45,190,78,0.16)', 'rgba(45,190,78,0)']}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0.3, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      )}
+      <View style={s.cardHeader}>
+        <Txt variant="caps" color={Brand.offWhite} o={0.6} upper>
+          {game.leagueDisplay}
+        </Txt>
+        {live ? (
+          <View style={s.livePill}>
+            <Txt variant="caps" color={Brand.white} upper>
+              Live
+            </Txt>
+          </View>
+        ) : (
+          <Txt variant="time" color={Brand.dim}>
+            {fmtStart(game.startTime)}
+          </Txt>
+        )}
+      </View>
+
+      <View style={s.cardBody}>
+        <Txt variant="title" numberOfLines={1}>
+          {game.away.name} vs. {game.home.name}
+        </Txt>
+        <View style={s.scoreRow}>
+          <SideCol
+            logo={game.away.logo}
+            score={game.away.score}
+            abbr={game.away.abbreviation}
+            pct={awayPct}
+            pctColor={Brand.lime}
+            align="left"
+            showScore={showScore}
+          />
+          <View style={s.centerCol}>
+            <Txt variant="time" color={Brand.dim}>
+              {live ? game.statusDetail : ''}
+            </Txt>
+            {homePct != null && awayPct != null && (
+              <View style={s.probBar}>
+                <View style={[s.probSeg, { flex: awayPct, backgroundColor: Brand.lime }]} />
+                <View style={[s.probSeg, { flex: homePct, backgroundColor: Brand.blue }]} />
+              </View>
+            )}
+          </View>
+          <SideCol
+            logo={game.home.logo}
+            score={game.home.score}
+            abbr={game.home.abbreviation}
+            pct={homePct}
+            pctColor={Brand.blue}
+            align="right"
+            showScore={showScore}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const router = useRouter();
   const id = useIdentity();
   const { balance, positions, refresh: refreshAccount } = useAccount();
   const [games, setGames] = useState<Game[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [sportFilter, setSportFilter] = useState<string | null>(null);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
     try {
       const g = await fetchGames();
-      if (mounted.current) {
-        setGames(g);
-        setError(null);
-      }
-    } catch {
-      if (mounted.current) setError('Unable to reach the exchange. Pull to retry.');
-    }
+      if (mounted.current) setGames(g);
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -223,303 +346,208 @@ export default function HomeScreen() {
 
   const presentSports = useMemo(() => {
     const set = new Set(games.filter((g) => isLive(g) || isUpcoming(g)).map((g) => g.league));
-    return SPORT_ORDER.filter((s) => set.has(s));
+    return SPORT_ORDER.filter((sp) => set.has(sp) && SPORT_CHIP[sp]);
   }, [games]);
 
-  const sections = useMemo<Section[]>(() => {
-    const visible = games.filter((g) => (sportFilter ? g.league === sportFilter : true));
-    const startKey = (g: Game) => g.startTime ?? '';
-    const live = visible.filter(isLive).sort((a, b) => startKey(a).localeCompare(startKey(b)));
-    const upcoming = visible
-      .filter((g) => !isLive(g) && isUpcoming(g))
-      .sort(
-        (a, b) =>
-          Number(b.pregame) - Number(a.pregame) ||
-          SPORT_ORDER.indexOf(a.league) - SPORT_ORDER.indexOf(b.league) ||
-          startKey(a).localeCompare(startKey(b)),
-      );
-    const out: Section[] = [];
-    if (live.length) out.push({ title: null, data: live });
-    if (upcoming.length) out.push({ title: 'Upcoming', data: upcoming });
-    return out;
+  const { live, upcoming } = useMemo(() => {
+    const vis = games.filter((g) => (sportFilter ? g.league === sportFilter : true));
+    const key = (g: Game) => g.startTime ?? '';
+    return {
+      live: vis.filter(isLive).sort((a, b) => key(a).localeCompare(key(b))),
+      upcoming: vis
+        .filter((g) => !isLive(g) && isUpcoming(g))
+        .sort(
+          (a, b) =>
+            Number(b.pregame) - Number(a.pregame) ||
+            SPORT_ORDER.indexOf(a.league) - SPORT_ORDER.indexOf(b.league) ||
+            key(a).localeCompare(key(b)),
+        ),
+    };
   }, [games, sportFilter]);
 
-  const liveCount = useMemo(() => games.filter(isLive).length, [games]);
   const gameById = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
-
+  const liveCount = live.length;
   const totalPnl = (balance?.closedPnl ?? 0) + (balance?.unrealizedPnl ?? 0);
   const hasBets = (balance?.tradeCount ?? 0) > 0 || positions.length > 0;
-  const displayName = id.auth?.username ?? null;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(g) => g.id}
-        renderItem={({ item }) => (
-          <GameCard game={item} onPress={() => router.push(`/game/${item.id}`)} />
-        )}
-        renderSectionHeader={({ section }) =>
-          section.title ? (
-            <ThemedText type="smallBold" style={styles.sectionTitle}>
-              {section.title}
-            </ThemedText>
-          ) : null
-        }
-        ListHeaderComponent={
-          <View>
-            <View style={styles.topBar}>
-              <ThemedText style={styles.wordmark}>parabolic</ThemedText>
-              <View style={styles.topRight}>
-                {balance && (
-                  <View style={styles.balancePill}>
-                    <View style={styles.coin}>
-                      <ThemedText style={styles.coinText}>$</ThemedText>
-                    </View>
-                    <ThemedText type="smallBold" style={{ color: Brand.white }}>
-                      {fmtUsd(balance.accountValue)}
-                    </ThemedText>
-                  </View>
-                )}
-                <Pressable onPress={() => router.push('/profile')} style={styles.avatar} hitSlop={6}>
-                  <ThemedText type="smallBold" style={{ color: Brand.white }}>
-                    {(displayName ?? 'G')[0]!.toUpperCase()}
-                  </ThemedText>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.greetingWrap}>
-              <ThemedText style={styles.greeting}>{greeting(displayName)}</ThemedText>
-              {hasBets && balance ? (
-                <View style={styles.pnlRow}>
-                  <ThemedText style={styles.greetingSub}>
-                    You’re{' '}
-                    <ThemedText
-                      style={[
-                        styles.greetingSub,
-                        { color: totalPnl >= 0 ? Brand.primary : Brand.red, fontWeight: '700' },
-                      ]}>
-                      {totalPnl >= 0 ? '+' : ''}
-                      {fmtUsd(totalPnl, 0)}
-                    </ThemedText>
-                  </ThemedText>
-                  <View style={styles.fromPill}>
-                    <ThemedText type="smallBold" style={{ color: Brand.dim, fontSize: 12 }}>
-                      FROM {balance.tradeCount + positions.length} BET
-                      {balance.tradeCount + positions.length === 1 ? '' : 'S'}
-                    </ThemedText>
-                  </View>
-                </View>
-              ) : null}
-              <ThemedText style={styles.greetingSub}>
-                {positions.length > 0
-                  ? `${positions.length} open bet${positions.length === 1 ? '' : 's'} still in play`
-                  : liveCount > 0
-                    ? `${liveCount} ${liveCount === 1 ? 'game is' : 'games are'} live right now`
-                    : 'Markets open before kickoff'}
-              </ThemedText>
-            </View>
-
-            {positions.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.betsRow}>
-                {positions.map((p) => (
-                  <OpenBetCard
-                    key={p.id}
-                    pos={p}
-                    game={gameById.get(p.gameId)}
-                    onPress={() => router.push(`/game/${p.gameId}`)}
-                  />
-                ))}
-              </ScrollView>
-            )}
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsRow}>
-              <Chip label="All" active={sportFilter == null} onPress={() => setSportFilter(null)} />
-              {presentSports.map((s) => (
-                <Chip
-                  key={s}
-                  icon={SPORT_ICON[s]}
-                  label={SPORT_LABEL[s] ?? s.toUpperCase()}
-                  active={sportFilter === s}
-                  onPress={() => setSportFilter(sportFilter === s ? null : s)}
-                />
-              ))}
-            </ScrollView>
-            {error && (
-              <ThemedText type="small" style={styles.error}>
-                {error}
-              </ThemedText>
-            )}
-          </View>
-        }
-        contentContainerStyle={styles.listContent}
-        stickySectionHeadersEnabled={false}
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.primary} />
-        }
-        ListEmptyComponent={
-          <ThemedText type="small" style={styles.empty}>
-            {error ? '' : 'Loading markets…'}
-          </ThemedText>
-        }
-      />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.green} />
+        }>
+        <Header value={balance?.accountValue ?? null} onAvatar={() => router.push('/profile')} />
+        <Greeting
+          name={id.auth?.username ?? null}
+          pnl={totalPnl}
+          betCount={(balance?.tradeCount ?? 0) + positions.length}
+          openCount={positions.length}
+          hasBets={hasBets}
+          liveCount={liveCount}
+        />
+
+        {positions.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.betsRow}>
+            {positions.map((pos) => (
+              <OpenBetCard
+                key={pos.id}
+                pos={pos}
+                game={gameById.get(pos.gameId)}
+                onPress={() => router.push(`/game/${pos.gameId}`)}
+              />
+            ))}
+          </ScrollView>
+        )}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.chipsRow}>
+          {presentSports.map((sp) => (
+            <Chip
+              key={sp}
+              label={SPORT_CHIP[sp].label}
+              icon={SPORT_CHIP[sp].icon}
+              active={sportFilter === sp}
+              onPress={() => setSportFilter(sportFilter === sp ? null : sp)}
+            />
+          ))}
+        </ScrollView>
+
+        <View style={s.cards}>
+          {live.map((g) => (
+            <GameCard key={g.id} game={g} onPress={() => router.push(`/game/${g.id}`)} />
+          ))}
+          {upcoming.length > 0 && (
+            <Txt variant="display" style={s.upcomingHeader}>
+              Upcoming
+            </Txt>
+          )}
+          {upcoming.map((g) => (
+            <GameCard key={g.id} game={g} onPress={() => router.push(`/game/${g.id}`)} />
+          ))}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Chip({
-  label,
-  icon,
-  active,
-  onPress,
-}: {
-  label: string;
-  icon?: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={[styles.chip, active && { backgroundColor: Brand.cta }]}>
-      <ThemedText type="smallBold" style={{ color: active ? Brand.ctaText : Brand.dim }}>
-        {icon ? `${icon} ` : ''}
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Brand.bg },
-  topBar: {
+  content: { paddingBottom: NAV_SPACE },
+  header: {
+    height: 60,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.two,
   },
-  wordmark: {
-    color: Brand.white,
-    fontSize: 22,
-    lineHeight: 30,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   balancePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: Brand.surface,
-    borderRadius: 999,
-    paddingLeft: 6,
-    paddingRight: 14,
-    paddingVertical: 5,
-  },
-  coin: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Brand.lime,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coinText: { color: '#1a1c0e', fontSize: 13, lineHeight: 16, fontWeight: '800' },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Brand.surface,
-    borderWidth: 1,
-    borderColor: Brand.border2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  greetingWrap: { marginTop: Spacing.two, marginBottom: Spacing.three, gap: 4 },
-  greeting: { color: Brand.white, fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  pnlRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  fromPill: {
-    backgroundColor: Brand.surface,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  greetingSub: { color: Brand.dim, fontSize: 18, lineHeight: 26, fontWeight: '600' },
-  betsRow: { gap: Spacing.two, paddingBottom: Spacing.three },
-  betCard: {
-    width: 168,
-    backgroundColor: Brand.card,
-    borderColor: Brand.border,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: Spacing.three,
     gap: 6,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 6,
+    borderRadius: Radii.pill,
+    backgroundColor: Brand.balanceGlass,
+    borderWidth: 0.5,
+    borderColor: Brand.hair05,
   },
-  betCardTeam: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  betFlag: { width: 22, height: 22, borderRadius: 11 },
+  coin: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#e8b84b' },
+  plusBtn: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(84,83,83,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatar: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  avatarImg: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: Brand.hair17 },
+
+  greeting: { paddingHorizontal: 16, paddingTop: 10, gap: 6 },
+  greetLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  fromPill: {
+    height: 22,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radii.md,
+    backgroundColor: Brand.activeItem,
+    borderWidth: 1,
+    borderColor: Brand.hair03,
+  },
+
+  betsRow: { gap: 8, paddingHorizontal: 16, paddingTop: 20 },
+  betCard: {
+    width: 176.5,
+    padding: 14,
+    gap: 8,
+    borderRadius: Radii.card,
+    backgroundColor: Brand.cardNeutral,
+    borderWidth: 1,
+    borderColor: Brand.hair02,
+  },
+  betTeam: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  betFlag: { width: 16, height: 16, borderRadius: 8 },
   betPctPill: {
     alignSelf: 'flex-start',
-    backgroundColor: Brand.surface,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 4,
+    borderRadius: Radii.sm,
+    backgroundColor: Brand.pctPillBg,
   },
-  chipsRow: { gap: Spacing.two, paddingBottom: Spacing.two },
+
+  chipsRow: { gap: 4, paddingHorizontal: 16, paddingTop: 20 },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: Brand.chip,
-  },
-  error: { color: Brand.red, paddingVertical: Spacing.two },
-  listContent: {
-    paddingHorizontal: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.four,
-    gap: Spacing.two,
-  },
-  sectionTitle: {
-    color: Brand.white,
-    fontSize: 18,
-    lineHeight: 26,
-    marginTop: Spacing.three,
-    marginBottom: Spacing.one,
-  },
-  card: {
-    backgroundColor: Brand.card,
-    borderColor: Brand.border,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  leagueLabel: { color: Brand.mute, letterSpacing: 1.2, fontSize: 12, lineHeight: 16 },
-  livePill: {
-    backgroundColor: Brand.livePill,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-  },
-  matchTitle: { color: Brand.white, fontSize: 17, lineHeight: 24, fontWeight: '600' },
-  scoreRow: { flexDirection: 'row', alignItems: 'center' },
-  sideCol: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flex: 1 },
-  centerCol: { flex: 1.2, alignItems: 'center' },
-  flag: { width: 36, height: 36, borderRadius: 18 },
-  score: { color: Brand.white, fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  probRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  probTrack: {
-    flex: 1,
+    height: 36,
     flexDirection: 'row',
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-    gap: 3,
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 10,
+    paddingRight: 12,
+    borderRadius: Radii.pill,
   },
-  probFill: { borderRadius: 3 },
-  empty: { color: Brand.dim, textAlign: 'center', marginTop: Spacing.five },
+  chipActive: {
+    backgroundColor: Brand.surface,
+    borderRadius: Radii.chip,
+    borderWidth: 0.5,
+    borderColor: Brand.hair05,
+  },
+
+  cards: { paddingHorizontal: 16, paddingTop: 20, gap: 16 },
+  upcomingHeader: { marginTop: 4 },
+  card: { borderRadius: Radii.card, overflow: 'hidden' },
+  cardLive: { backgroundColor: Brand.card, borderWidth: 1, borderColor: Brand.greenBorder },
+  cardIdle: { backgroundColor: Brand.card, borderWidth: 1, borderColor: Brand.hair05 },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 16,
+    paddingRight: 12,
+    paddingTop: 13,
+  },
+  livePill: {
+    backgroundColor: Brand.green,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 22,
+  },
+  cardBody: { paddingHorizontal: 16, paddingBottom: 14, paddingTop: 10, gap: 12 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sideCol: { width: 80, gap: 6 },
+  flagScore: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  flagScoreRev: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  cardFlag: { width: 28, height: 28, borderRadius: 14 },
+  sideMeta: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  centerCol: { width: 120, alignItems: 'center', gap: 8 },
+  probBar: { flexDirection: 'row', width: 97, height: 6, gap: 4 },
+  probSeg: { borderRadius: 3 },
 });

@@ -11,7 +11,10 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "gg.parabolic.app",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "gg.parabolic.app",
@@ -42,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f18a540b-af15-4d3b-b85a-39b0c7ee9876"
+      }
     }
   }
 }
