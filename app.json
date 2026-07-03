@@ -1,18 +1,22 @@
 {
   "expo": {
-    "name": "parabolic-mobile",
+    "name": "Parabolic",
     "slug": "parabolic-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "parabolicmobile",
-    "userInterfaceStyle": "automatic",
+    "scheme": "parabolic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#06070a",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "gg.parabolic.app",
+      "supportsTablet": false
     },
     "android": {
+      "package": "gg.parabolic.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#06070a",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#06070a",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

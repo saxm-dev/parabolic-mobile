@@ -1,56 +1,33 @@
-# Welcome to your Expo app 👋
+# Parabolic Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+iOS app for [Parabolic](https://parabolic.gg) — trade live win probability on real games.
 
-## Get started
+Built with Expo SDK 57 (React Native + expo-router native tabs), shipped to TestFlight via EAS Build/Submit (cloud iOS builds — no Mac required).
 
-1. Install dependencies
+## Stack
 
-   ```bash
-   npm install
-   ```
+- **Expo SDK 57** / React Native 0.86 / TypeScript, `expo-router` with native iOS tabs
+- **Backend**: same Railway API as the web terminal (`src/lib/api.ts`)
+- **Theme**: Parabolic carbon + mint palette, mirrored from the web app (`src/constants/theme.ts`)
 
-2. Start the app
+## Develop
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```sh
+npm install
+npx expo start        # scan QR with Expo Go on iPhone
+npx expo start --web  # browser preview
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Build & ship
 
-### Other setup steps
+```sh
+eas build --platform ios --profile production
+eas submit --platform ios
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Layout
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `src/app/` — screens (expo-router): `index` Markets, `positions`, `leaderboard`, `profile`
+- `src/lib/api.ts` — typed backend client (games, oracle, leaderboard)
+- `src/constants/theme.ts` — brand palette + spacing
+- `src/components/app-tabs.tsx` — native tab bar (`.web.tsx` variant for browser)

@@ -1,27 +1,43 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Parabolic brand theme — mirrors the web app's src/lib/theme.js (B palette).
+ * The app is dark-only: light and dark resolve to the same carbon palette.
  */
 
 import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/** Parabolic brand palette (carbon surfaces + mint accent). */
+export const Brand = {
+  primary: '#1fd182',
+  primaryLight: '#52e0a3',
+  green: '#1fd182',
+  greenLight: '#52e0a3',
+  red: '#ff5247',
+  cyan: '#00d4ff',
+  ice: '#5ce1ff',
+  blue: '#0088cc',
+  white: '#eef1f6',
+  dim: '#949aa6',
+  mute: '#5e636e',
+  bg: '#06070a',
+  card: '#0b0d11',
+  surface: '#11141a',
+  border: '#181b22',
+  border2: '#1f2329',
+} as const;
+
+const carbon = {
+  text: Brand.white,
+  background: Brand.bg,
+  backgroundElement: Brand.card,
+  backgroundSelected: Brand.surface,
+  textSecondary: Brand.dim,
+};
+
 export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
+  light: carbon,
+  dark: carbon,
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
