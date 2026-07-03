@@ -56,7 +56,7 @@ Supporting sheets from the same page: cash-out sheet `63:3498`, position long-pr
 - Create account: stepped conversational flow, one field per screen with the keyboard up (`63:2294` "What's your name" pattern) → username → password → (email optional) → claims guest UUID.
 - Log in: username + password.
 - Reachable later from Profile (guests see the same CTAs there).
-- Hero asset needed from Sax (licensed/owned imagery) — placeholder gradient until then.
+- Ships with the WIN-pattern background only (no athlete imagery for now — decision July 3).
 
 ### 4.2 Home (`63:2319`, `63:2583`)
 - **Top bar:** wordmark · **balance pill** (always visible, $10k for fresh guests; `GET /api/balance/:userId`) · avatar → Profile. After a fill, the top bar swaps to the **"Bet placed ✓ / View"** chip briefly (`63:2583`), View → the game.
@@ -64,14 +64,14 @@ Supporting sheets from the same page: cash-out sheet `63:3498`, position long-pr
 - **Open bets strip:** horizontal cards (team flag/logo, name, P&L $, return % pill) → tap into the game.
 - **Sport category nav:** horizontal chips with sport icons (Football, Soccer, Basketball, MMA… per design) — white active pill. Only sports with games appear; "All" default.
 - **Market cards:** league label, LIVE pill, "A vs. B" title, logos + scores + clock (live) / countdown + start time (upcoming), per-side win % + split probability bar. Live section first, then **Upcoming**.
-- **Liquid glass bottom nav — 5 targets** matching the design: **Home · Trades (bets) · Notifications (bell) · Profile · Search**. Built on SDK 57 native tabs / `expo-glass-effect` so iOS renders true liquid glass. Bell and Search ship as stub screens in v1 (no backend feed/search yet) — visible, tappable, honest "coming soon" empty states.
+- **Liquid glass bottom nav — 5 targets**: **Home · Trades (bets) · Leaderboard (trophy) · Profile · Search**. Built on SDK 57 native tabs / `expo-glass-effect` so iOS renders true liquid glass. Search ships as a stub screen in v1 (no backend search yet).
 - Data: `GET /api/games` 15s poll → WebSocket `game_update` push in M5.
 
 ### 4.3 Trading terminal (`63:2869`, `63:3719`)
 - **Nav row:** back · bookmark (defer) · share (native sheet, links to `app.parabolic.gg`) · chat shortcut with unread dot.
 - **Scoreboard:** logos, names, records, big score, period/clock, LIVE pill; pregame = countdown + start time.
 - **Chart:** win-prob lines for **both sides** (no draw line) with floating `ABBR NN%` pills; volume read-out; timeframe chips **1H · 2H · 12H · 1D · LIVE** filtering `GET /api/oracle/:id/history`.
-- **Chat teaser:** avatar stack + "N users chatting" + **Join chat** — opens the per-game chat (backend `src/chat.js` + WS is live on web). Reading is open to all; sending requires login (same rule as web).
+- **Chat teaser:** avatar stack + "N users chatting" + **Join chat** — opens the per-game chat (backend `src/chat.js` + WS is live on web). **Anyone can read AND send without logging in for now** (decision July 3 — mobile diverges from the web login gate; guests get a generated display name).
 - **Tabs: Gamecast · Box Score · Chat.**
   - Gamecast: play timeline, scoring plays highlighted (goals/cards/subs markers for soccer, HT/FT dividers per design).
   - Box Score: possession-style leader bar + stat comparison rows with leader highlighting; Top players section when ESPN provides player data.
@@ -91,8 +91,7 @@ Supporting sheets from the same page: cash-out sheet `63:3498`, position long-pr
 
 - **Trades tab:** open bets (cash-out from here too) + settled history (`GET /api/profile/:userId/trades`). Long-press overlay (`63:4404`): Bet details / Go to match.
 - **Profile tab:** guest → stats + Create account/Log in; registered → performance stats, grouped settings (Account details, Privacy, Support, Log out) per the web ProfilePage structure.
-- **Leaderboard:** lives inside Search or Profile for now (not in the 5-icon bar) — points ↔ ROI toggle. Placement TBD with Sax.
-- **Notifications (bell):** stub — "Nothing yet" empty state.
+- **Leaderboard (trophy tab):** points ↔ ROI toggle, current-user row highlighted.
 - **Search:** stub — market search comes later (needs backend endpoint).
 
 ## 6. Backend dependencies
@@ -134,6 +133,4 @@ Supporting sheets from the same page: cash-out sheet `63:3498`, position long-pr
 
 ## 10. Open questions
 
-1. **Leaderboard placement** — inside Search tab, inside Profile, or replace the bell until notifications exist?
-2. **Chat send for guests** — web gates sending on login; keep that on mobile, or allow guest sends with generated names?
-3. **Welcome hero asset** — who supplies the licensed athlete imagery, or do we ship the WIN-pattern background only?
+None — all v0.1/v0.2 questions resolved July 3: trophy/Leaderboard replaces the bell; chat is open to guests for now; welcome ships WIN-pattern-only. Build order: welcome/login → home → terminal → wagering flow.

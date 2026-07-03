@@ -175,14 +175,15 @@ export default function HomeScreen() {
 
   const sections = useMemo<Section[]>(() => {
     const visible = games.filter((g) => (sportFilter ? g.league === sportFilter : true));
-    const live = visible.filter(isLive).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const startKey = (g: Game) => g.startTime ?? '';
+    const live = visible.filter(isLive).sort((a, b) => startKey(a).localeCompare(startKey(b)));
     const upcoming = visible
       .filter((g) => !isLive(g) && isUpcoming(g))
       .sort(
         (a, b) =>
           Number(b.pregame) - Number(a.pregame) ||
           SPORT_ORDER.indexOf(a.league) - SPORT_ORDER.indexOf(b.league) ||
-          a.startTime.localeCompare(b.startTime),
+          startKey(a).localeCompare(startKey(b)),
       );
     const out: Section[] = [];
     if (live.length) out.push({ title: null, data: live });
