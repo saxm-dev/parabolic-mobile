@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatPanel } from '@/components/chat-panel';
@@ -17,6 +17,9 @@ import {
   type Play,
 } from '@/lib/api';
 import { fetchChat } from '@/lib/chat';
+import { cashOut } from '@/lib/trade';
+import { useAccount } from '@/hooks/use-account';
+import type { Position } from '@/lib/api';
 
 const POLL_MS = 10_000;
 type Tab = 'gamecast' | 'boxscore' | 'chat';
@@ -38,13 +41,20 @@ function fmtStart(iso: string): string {
   return `${day} at ${time}`;
 }
 
-function notifyTradingSoon() {
-  const msg = 'Order entry ships in the next build — trading is live on app.parabolic.gg today.';
+function fmtUsd(n: number): string {
+  const sign = n < 0 ? '-' : '';
+  return `${sign}$${Math.abs(n).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function notify(title: string, msg: string) {
   if (Platform.OS === 'web') {
     // eslint-disable-next-line no-alert
-    window.alert(msg);
+    window.alert(`${title}  ${msg}`);
   } else {
-    Alert.alert('Coming soon', msg);
+    Alert.alert(title, msg);
   }
 }
 
@@ -57,6 +67,10 @@ export default function GameDetailScreen() {
   const [tf, setTf] = useState<Timeframe>('LIVE');
   const [chatters, setChatters] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [cashOutOpen, setCashOutOpen] = useState(false);
+  const [cashingOut, setCashingOut] = useState(false);
+  const { positions, refresh: refreshAccount } = useAccount(10_000);
+  const myPos: Position | undefined = positions.find((pos) => pos.gameId === id);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
@@ -225,6 +239,36 @@ export default function GameDetailScreen() {
               </View>
             </Pressable>
 
+            {myPos && (
+              <Pressable onPress={() => setCashOutOpen(true)} style={styles.posRow}>
+                <Image
+                  source={{ uri: (myPos.side === 'home' ? game.home : game.away).logo }}
+                  style={styles.posFlag}
+                  contentFit="contain"
+                />
+                <View style={{ flex: 1, gap: 1 }}>
+                  <ThemedText type="smallBold" style={{ color: Brand.white }}>
+                    {(myPos.side === 'home' ? game.home : game.away).name}
+                  </ThemedText>
+                  <ThemedText type="small" style={{ color: Brand.mute, fontSize: 12 }}>
+                    {fmtUsd(myPos.margin)} · {myPos.leverage}x · in at{' '}
+                    {Math.round((myPos.side === 'home' ? myPos.entryPx : 1 - myPos.entryPx) * 100)}%
+                  </ThemedText>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 1 }}>
+                  <ThemedText
+                    type="smallBold"
+                    style={{ color: myPos.pnl >= 0 ? Brand.primary : Brand.red }}>
+                    {myPos.pnl >= 0 ? '+' : ''}
+                    {fmtUsd(myPos.pnl)}
+                  </ThemedText>
+                  <ThemedText type="small" style={{ color: Brand.dim, fontSize: 12 }}>
+                    Cash out ›
+                  </ThemedText>
+                </View>
+              </Pressable>
+            )}
+
             <View style={styles.tabsRow}>
               <TabButton label="Gamecast" active={tab === 'gamecast'} onPress={() => setTab('gamecast')} />
               <TabButton label="Box Score" active={tab === 'boxscore'} onPress={() => setTab('boxscore')} />
@@ -249,7 +293,9 @@ export default function GameDetailScreen() {
       {game && homePct != null && awayPct != null && (
         <View style={styles.buyBar}>
           <Pressable
-            onPress={notifyTradingSoon}
+            onPress={() =>
+              router.push({ pathname: '/trade/[id]', params: { id: game.id, side: 'away' } })
+            }
             style={[styles.buyBtn, { backgroundColor: 'rgba(233,167,247,0.14)' }]}>
             <Image source={{ uri: game.away.logo }} style={styles.buyFlag} contentFit="contain" />
             <ThemedText type="smallBold" style={{ color: Brand.sideAway, fontSize: 16, lineHeight: 22 }}>
@@ -260,7 +306,9 @@ export default function GameDetailScreen() {
             </ThemedText>
           </Pressable>
           <Pressable
-            onPress={notifyTradingSoon}
+            onPress={() =>
+              router.push({ pathname: '/trade/[id]', params: { id: game.id, side: 'home' } })
+            }
             style={[styles.buyBtn, { backgroundColor: 'rgba(124,192,244,0.14)' }]}>
             <Image source={{ uri: game.home.logo }} style={styles.buyFlag} contentFit="contain" />
             <ThemedText type="smallBold" style={{ color: Brand.sideHome, fontSize: 16, lineHeight: 22 }}>
@@ -272,6 +320,89 @@ export default function GameDetailScreen() {
           </Pressable>
         </View>
       )}
+
+      {/* ── Cash-out sheet (Figma 63:3498) ─────────────────────────── */}
+      <Modal
+        visible={cashOutOpen && !!myPos && !!game}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCashOutOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setCashOutOpen(false)} />
+        {myPos && game && (
+          <View style={styles.sheet}>
+            <View style={styles.grabber} />
+            <ThemedText
+              type="smallBold"
+              style={{ color: Brand.white, fontSize: 17, textAlign: 'center' }}>
+              Cash out this bet
+            </ThemedText>
+
+            <View style={{ alignItems: 'center', gap: 4 }}>
+              <Image
+                source={{ uri: (myPos.side === 'home' ? game.home : game.away).logo }}
+                style={{ width: 48, height: 48, borderRadius: 24 }}
+                contentFit="contain"
+              />
+              <ThemedText style={{ color: Brand.white, fontSize: 19, fontWeight: '700' }}>
+                {(myPos.side === 'home' ? game.home : game.away).name}
+              </ThemedText>
+              <ThemedText type="small" style={{ color: Brand.mute }}>
+                {fmtUsd(myPos.margin)}
+              </ThemedText>
+            </View>
+
+            <View style={styles.cashOutSummary}>
+              <View style={{ gap: 2 }}>
+                <ThemedText type="small" style={{ color: Brand.mute }}>
+                  Get back
+                </ThemedText>
+                <ThemedText style={{ color: Brand.white, fontSize: 24, fontWeight: '700' }}>
+                  {fmtUsd(myPos.margin + myPos.pnl)}
+                </ThemedText>
+              </View>
+              <View style={{ gap: 2, alignItems: 'flex-end' }}>
+                <ThemedText type="small" style={{ color: Brand.mute }}>
+                  Profit
+                </ThemedText>
+                <ThemedText
+                  style={{
+                    color: myPos.pnl >= 0 ? Brand.primary : Brand.red,
+                    fontSize: 24,
+                    fontWeight: '700',
+                  }}>
+                  {myPos.pnl >= 0 ? '+' : ''}
+                  {fmtUsd(myPos.pnl)}
+                </ThemedText>
+              </View>
+            </View>
+
+            <Pressable
+              disabled={cashingOut}
+              onPress={async () => {
+                if (!myPos || cashingOut) return;
+                setCashingOut(true);
+                try {
+                  await cashOut(game.id, myPos.side, myPos.size);
+                  setCashOutOpen(false);
+                  await refreshAccount();
+                  notify('Cashed out ✓', `You got back ~${fmtUsd(myPos.margin + myPos.pnl)}`);
+                } catch (e) {
+                  notify('Cash out failed', e instanceof Error ? e.message : 'Try again.');
+                } finally {
+                  setCashingOut(false);
+                }
+              }}
+              style={[styles.cashOutBtn, cashingOut && { opacity: 0.5 }]}>
+              <ThemedText style={{ color: Brand.ctaText, fontSize: 17, fontWeight: '700' }}>
+                {cashingOut ? 'Cashing out…' : `Cash out ${fmtUsd(myPos.margin + myPos.pnl)}`}
+              </ThemedText>
+            </Pressable>
+            <Pressable onPress={() => setCashOutOpen(false)} style={styles.keepOpenBtn}>
+              <ThemedText style={{ color: Brand.white, fontWeight: '600' }}>Keep it open</ThemedText>
+            </Pressable>
+          </View>
+        )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -487,4 +618,50 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   buyFlag: { width: 22, height: 22, borderRadius: 11 },
+  posRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    backgroundColor: Brand.card,
+    borderColor: Brand.border,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: Spacing.two + 4,
+  },
+  posFlag: { width: 30, height: 30, borderRadius: 15 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet: {
+    backgroundColor: '#121316',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: Spacing.three,
+    gap: Spacing.three,
+    paddingBottom: Spacing.four,
+  },
+  grabber: {
+    alignSelf: 'center',
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Brand.border2,
+  },
+  cashOutSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: Brand.surface,
+    borderRadius: 16,
+    padding: Spacing.three,
+  },
+  cashOutBtn: {
+    backgroundColor: Brand.cta,
+    borderRadius: 999,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  keepOpenBtn: {
+    backgroundColor: Brand.surface,
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
 });

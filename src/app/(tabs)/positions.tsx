@@ -36,7 +36,8 @@ function BetRow({
           {team?.name ?? pos.side.toUpperCase()}
         </ThemedText>
         <ThemedText type="small" style={{ color: Brand.mute }}>
-          {fmtUsd(pos.margin)} · {pos.leverage}x · in at {Math.round(pos.entryPx * 100)}%
+          {fmtUsd(pos.margin)} · {pos.leverage}x · in at{' '}
+          {Math.round((pos.side === 'home' ? pos.entryPx : 1 - pos.entryPx) * 100)}%
         </ThemedText>
       </View>
       <View style={{ alignItems: 'flex-end', gap: 2 }}>
