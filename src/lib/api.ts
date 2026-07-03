@@ -100,6 +100,47 @@ export async function fetchLeaderboard(sort: 'points' | 'pnl' = 'points'): Promi
   return data.leaderboard ?? [];
 }
 
+export interface BalanceInfo {
+  userId: string;
+  username: string | null;
+  balance: number;
+  lockedMargin: number;
+  availableBalance: number;
+  unrealizedPnl: number;
+  accountValue: number;
+  closedPnl: number;
+  totalVolume: number;
+  tradeCount: number;
+}
+
+export interface Position {
+  id: string;
+  gameId: string;
+  side: 'home' | 'away';
+  size: number;
+  entryPx: number;
+  markPrice: number;
+  liqPrice: number;
+  /** unrealized P&L in dollars */
+  pnl: number;
+  /** return on equity, percent */
+  roe: number;
+  margin: number;
+  leverage: number;
+  tp: number | null;
+  sl: number | null;
+  openedAt: number;
+}
+
+export async function fetchBalance(userId: string): Promise<BalanceInfo> {
+  return api<BalanceInfo>(`/balance/${userId}`);
+}
+
+export async function fetchPositions(userId: string): Promise<Position[]> {
+  const data = await api<{ positions: Position[] }>(`/positions/${userId}`);
+  return data.positions ?? [];
+}
+
 export interface Play {
   id: string;
   text: string;

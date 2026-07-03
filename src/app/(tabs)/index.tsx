@@ -13,7 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Brand, Spacing } from '@/constants/theme';
-import { fetchGames, type Game } from '@/lib/api';
+import { useAccount } from '@/hooks/use-account';
+import { useIdentity } from '@/hooks/use-identity';
+import { fetchGames, type Game, type Position } from '@/lib/api';
 
 const POLL_MS = 15_000;
 
@@ -27,6 +29,15 @@ const SPORT_LABEL: Record<string, string> = {
   ncaam: 'College Basketball',
   nhl: 'Hockey',
   mls: 'Soccer',
+};
+const SPORT_ICON: Record<string, string> = {
+  wcup: '⚽',
+  mlb: '⚾',
+  nfl: '🏈',
+  nba: '🏀',
+  ncaam: '🏀',
+  nhl: '🏒',
+  mls: '⚽',
 };
 
 function isLive(g: Game) {
@@ -50,6 +61,14 @@ function fmtStart(iso: string): string {
   return `${day} at ${time}`;
 }
 
+function fmtUsd(n: number, digits = 2): string {
+  const sign = n < 0 ? '-' : '';
+  return `${sign}$${Math.abs(n).toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
+}
+
 /** Home win probability 0..1 from the oracle (mark first, index fallback). */
 function homeProb(g: Game): number | null {
   const o = g.oracle;
@@ -59,11 +78,10 @@ function homeProb(g: Game): number | null {
   return p;
 }
 
-function greeting(): string {
+function greeting(name?: string | null): string {
   const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  const base = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return name ? `${base}, ${name}` : base;
 }
 
 function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
@@ -130,10 +148,45 @@ function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
   );
 }
 
+function OpenBetCard({
+  pos,
+  game,
+  onPress,
+}: {
+  pos: Position;
+  game: Game | undefined;
+  onPress: () => void;
+}) {
+  const team = game ? (pos.side === 'home' ? game.home : game.away) : null;
+  const up = pos.pnl >= 0;
+  return (
+    <Pressable onPress={onPress} style={styles.betCard}>
+      <View style={styles.betCardTeam}>
+        {team && <Image source={{ uri: team.logo }} style={styles.betFlag} contentFit="contain" />}
+        <ThemedText numberOfLines={1} style={{ color: Brand.white, fontWeight: '600', flex: 1 }}>
+          {team?.name ?? pos.side.toUpperCase()}
+        </ThemedText>
+      </View>
+      <ThemedText type="smallBold" style={{ color: up ? Brand.primary : Brand.red, fontSize: 17 }}>
+        {up ? '+' : ''}
+        {fmtUsd(pos.pnl)}
+      </ThemedText>
+      <View style={styles.betPctPill}>
+        <ThemedText type="smallBold" style={{ color: up ? Brand.primary : Brand.red, fontSize: 12 }}>
+          {up ? '+' : ''}
+          {pos.roe.toFixed(1)}%
+        </ThemedText>
+      </View>
+    </Pressable>
+  );
+}
+
 type Section = { title: string | null; data: Game[] };
 
 export default function HomeScreen() {
   const router = useRouter();
+  const id = useIdentity();
+  const { balance, positions, refresh: refreshAccount } = useAccount();
   const [games, setGames] = useState<Game[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,9 +217,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await Promise.all([load(), refreshAccount()]);
     setRefreshing(false);
-  }, [load]);
+  }, [load, refreshAccount]);
 
   const presentSports = useMemo(() => {
     const set = new Set(games.filter((g) => isLive(g) || isUpcoming(g)).map((g) => g.league));
@@ -192,6 +245,11 @@ export default function HomeScreen() {
   }, [games, sportFilter]);
 
   const liveCount = useMemo(() => games.filter(isLive).length, [games]);
+  const gameById = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
+
+  const totalPnl = (balance?.closedPnl ?? 0) + (balance?.unrealizedPnl ?? 0);
+  const hasBets = (balance?.tradeCount ?? 0) > 0 || positions.length > 0;
+  const displayName = id.auth?.username ?? null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -212,15 +270,73 @@ export default function HomeScreen() {
           <View>
             <View style={styles.topBar}>
               <ThemedText style={styles.wordmark}>parabolic</ThemedText>
+              <View style={styles.topRight}>
+                {balance && (
+                  <View style={styles.balancePill}>
+                    <View style={styles.coin}>
+                      <ThemedText style={styles.coinText}>$</ThemedText>
+                    </View>
+                    <ThemedText type="smallBold" style={{ color: Brand.white }}>
+                      {fmtUsd(balance.accountValue)}
+                    </ThemedText>
+                  </View>
+                )}
+                <Pressable onPress={() => router.push('/profile')} style={styles.avatar} hitSlop={6}>
+                  <ThemedText type="smallBold" style={{ color: Brand.white }}>
+                    {(displayName ?? 'G')[0]!.toUpperCase()}
+                  </ThemedText>
+                </Pressable>
+              </View>
             </View>
+
             <View style={styles.greetingWrap}>
-              <ThemedText style={styles.greeting}>{greeting()}</ThemedText>
+              <ThemedText style={styles.greeting}>{greeting(displayName)}</ThemedText>
+              {hasBets && balance ? (
+                <View style={styles.pnlRow}>
+                  <ThemedText style={styles.greetingSub}>
+                    You’re{' '}
+                    <ThemedText
+                      style={[
+                        styles.greetingSub,
+                        { color: totalPnl >= 0 ? Brand.primary : Brand.red, fontWeight: '700' },
+                      ]}>
+                      {totalPnl >= 0 ? '+' : ''}
+                      {fmtUsd(totalPnl, 0)}
+                    </ThemedText>
+                  </ThemedText>
+                  <View style={styles.fromPill}>
+                    <ThemedText type="smallBold" style={{ color: Brand.dim, fontSize: 12 }}>
+                      FROM {balance.tradeCount + positions.length} BET
+                      {balance.tradeCount + positions.length === 1 ? '' : 'S'}
+                    </ThemedText>
+                  </View>
+                </View>
+              ) : null}
               <ThemedText style={styles.greetingSub}>
-                {liveCount > 0
-                  ? `${liveCount} ${liveCount === 1 ? 'game is' : 'games are'} live right now`
-                  : 'Markets open before kickoff'}
+                {positions.length > 0
+                  ? `${positions.length} open bet${positions.length === 1 ? '' : 's'} still in play`
+                  : liveCount > 0
+                    ? `${liveCount} ${liveCount === 1 ? 'game is' : 'games are'} live right now`
+                    : 'Markets open before kickoff'}
               </ThemedText>
             </View>
+
+            {positions.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.betsRow}>
+                {positions.map((p) => (
+                  <OpenBetCard
+                    key={p.id}
+                    pos={p}
+                    game={gameById.get(p.gameId)}
+                    onPress={() => router.push(`/game/${p.gameId}`)}
+                  />
+                ))}
+              </ScrollView>
+            )}
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -229,6 +345,7 @@ export default function HomeScreen() {
               {presentSports.map((s) => (
                 <Chip
                   key={s}
+                  icon={SPORT_ICON[s]}
                   label={SPORT_LABEL[s] ?? s.toUpperCase()}
                   active={sportFilter === s}
                   onPress={() => setSportFilter(sportFilter === s ? null : s)}
@@ -257,10 +374,21 @@ export default function HomeScreen() {
   );
 }
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function Chip({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable onPress={onPress} style={[styles.chip, active && { backgroundColor: Brand.cta }]}>
       <ThemedText type="smallBold" style={{ color: active ? Brand.ctaText : Brand.dim }}>
+        {icon ? `${icon} ` : ''}
         {label}
       </ThemedText>
     </Pressable>
@@ -282,9 +410,65 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  greetingWrap: { marginTop: Spacing.two, marginBottom: Spacing.three, gap: 2 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  balancePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Brand.surface,
+    borderRadius: 999,
+    paddingLeft: 6,
+    paddingRight: 14,
+    paddingVertical: 5,
+  },
+  coin: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Brand.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coinText: { color: '#1a1c0e', fontSize: 13, lineHeight: 16, fontWeight: '800' },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Brand.surface,
+    borderWidth: 1,
+    borderColor: Brand.border2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  greetingWrap: { marginTop: Spacing.two, marginBottom: Spacing.three, gap: 4 },
   greeting: { color: Brand.white, fontSize: 28, lineHeight: 34, fontWeight: '700' },
-  greetingSub: { color: Brand.dim, fontSize: 16, lineHeight: 24, fontWeight: '500' },
+  pnlRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  fromPill: {
+    backgroundColor: Brand.surface,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  greetingSub: { color: Brand.dim, fontSize: 18, lineHeight: 26, fontWeight: '600' },
+  betsRow: { gap: Spacing.two, paddingBottom: Spacing.three },
+  betCard: {
+    width: 168,
+    backgroundColor: Brand.card,
+    borderColor: Brand.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: Spacing.three,
+    gap: 6,
+  },
+  betCardTeam: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  betFlag: { width: 22, height: 22, borderRadius: 11 },
+  betPctPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: Brand.surface,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
   chipsRow: { gap: Spacing.two, paddingBottom: Spacing.two },
   chip: {
     paddingHorizontal: 14,
@@ -336,5 +520,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     gap: 3,
   },
+  probFill: { borderRadius: 3 },
   empty: { color: Brand.dim, textAlign: 'center', marginTop: Spacing.five },
 });
