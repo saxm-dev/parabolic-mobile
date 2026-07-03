@@ -120,17 +120,32 @@ Supporting sheets from the same page: cash-out sheet `63:3498`, position long-pr
 - Secrets: token/UUID in secure store only; TLS only; nothing sensitive in the repo.
 - App Review: paper-trading/points framing in all App Store metadata (no bet/wager/cash-out language there), age 17+ (simulated gambling), privacy policy URL, App Privacy = contact info account-linked. Review notes state clearly: no real money in or out.
 
-## 9. Milestones
+## 9. Design-to-code fidelity workflow (v0.3 — the core process)
+
+**Problem being fixed:** the first pass (M0–M3) coded from flattened PNG *renders* of the frames by eye — so colors, fonts, type sizes, spacing, and radii were approximated, brand fonts weren't loaded, and the file's own component/token pages were ignored. Functionally everything works and is wired to the backend; it just doesn't *look* like the designs. The rebuild is a re-skin to real fidelity, not a rewrite.
+
+The pipeline, per screen:
+
+1. **Extract ground truth (not pictures).** Source of truth = the **Figma Dev Mode MCP** (`https://mcp.figma.com/mcp`). For each frame pull the structured node data + variables/styles: exact box geometry, fills (hex/gradients), strokes, effects, corner radii, auto-layout padding/item-spacing, and per-text-node font family/size/weight/letter-spacing/line-height. (REST `/v1/files/:key/nodes` is the fallback if the MCP seat/auth isn't available — ~90% of the same data.)
+2. **Design system first.** Codify extracted tokens into `theme.ts` (real named colors, a type ramp with exact size/weight/leading, the actual spacing scale, radii). **Load the real brand fonts** (Clash Display + Hanken Grotesk) via `expo-font`. Build the repeated primitives (pill button, card, chip, bottom sheet, list row, team row, prob bar) mirroring the file's **"Global Components" (63:5165) / "Game Details Components" (63:5037)** pages 1:1. Screens then compose primitives → consistent by construction.
+3. **Build the screen** by composing primitives, coding to measured values.
+4. **Objective fidelity gate.** Render at the frame's exact width (393pt), **overlay the Figma export at ~50% opacity** over the running screen and screenshot to expose misalignment; read computed styles with `preview_inspect` and assert them against node values (font, size, padding, color). Iterate until it matches, then **Sax signs off on that screen before the next.**
+
+**Rollout decision (July 3):** validate the whole pipeline on **one pilot screen first — Home** (its primitives — nav, balance pill, cards, chips, prob bars, type ramp — recur on every other screen, so nailing them propagates). Sign-off on Home → apply the proven process to terminal, wager flow, welcome.
+
+**Tooling:** font loading via `expo-font`; overlay-diff harness in the web preview; (optional) a node-tree → spec dumper if we fall back to REST.
+
+## 10. Milestones (revised v0.3)
 
 | # | Deliverable | Definition of done |
 |---|---|---|
-| M0 ✅ | Foundation | Home cards, terminal (chart/gamecast/box score), leaderboard on live data |
-| M1 | **Wagering flow** | Amount keypad → leverage sheet → auto cash-out sheet → review → slide-to-confirm → real fill → position visible in terminal; cash-out sheet works; errors handled |
-| M2 | **Welcome + identity** | Welcome/login with Skip, stepped signup claiming guest UUID, balance pill everywhere ($10k guests), Trades tab with history |
-| M3 | **Terminal complete + glass nav** | Chat tab + teaser live over WS, timeframe chips, records/leader highlighting, 5-icon liquid glass nav with bell/search stubs, home open-bets strip + P&L greeting + bet-placed chip |
-| M4 | **TestFlight internal** | Icon/splash, `eas build` production, App Store Connect record, installed on Sax's phone |
-| M5 | **Live polish + external-ready** | WS everywhere (no polling), brand fonts, haptics tuned, scoring markers on chart, Beta App Review passed |
+| M0 ✅ | Functional foundation | All 4 flows built + wired to backend, full loop verified (browse→wager→cash out). Design fidelity = approximate. |
+| **DS** | **Design system extraction** | Figma MCP live; tokens + type ramp in `theme.ts` from real node data; brand fonts loaded; primitive components mirror the Components pages |
+| **P1** | **Home pilot to fidelity** | Home rebuilt through the gate; overlay-diff matches; computed styles assert against node values; Sax signs off |
+| **P2** | **Remaining screens to fidelity** | Terminal, wager flow, welcome rebuilt on the proven primitives + gate |
+| M4 | **TestFlight internal** | Dev build already set up (SDK 57 > Expo Go); `eas build` production, App Store Connect record, on Sax's phone |
+| M5 | **Live polish + external-ready** | WS everywhere, haptics, scoring markers, Beta App Review passed |
 
-## 10. Open questions
+## 11. Open questions
 
-None — all v0.1/v0.2 questions resolved July 3: trophy/Leaderboard replaces the bell; chat is open to guests for now; welcome ships WIN-pattern-only. Build order: welcome/login → home → terminal → wagering flow.
+None open. Decisions to date: trophy/Leaderboard replaces the bell; chat open to guests; welcome ships WIN-pattern-only; **fidelity source = Figma Dev Mode MCP; pilot = Home**. On-device testing uses a dev build (SDK 57 is ahead of App Store Expo Go), config in `eas.json`.
