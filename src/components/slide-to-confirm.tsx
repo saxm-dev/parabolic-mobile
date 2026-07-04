@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { Animated, PanResponder, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
+import { Txt } from '@/components/txt';
 import { Brand } from '@/constants/theme';
 
 const THUMB = 56;
+const PAD = 4;
 
 /** Drag the thumb to the end to fire onConfirm (Figma review screen). */
 export function SlideToConfirm({
@@ -17,65 +18,78 @@ export function SlideToConfirm({
   disabled?: boolean;
 }) {
   const [trackW, setTrackW] = useState(0);
+  const [done, setDone] = useState(false);
   const x = useRef(new Animated.Value(0)).current;
   const confirmed = useRef(false);
 
-  const maxX = Math.max(0, trackW - THUMB - 8);
+  const maxXRef = useRef(0);
+  maxXRef.current = Math.max(0, trackW - THUMB - PAD * 2);
+  const onConfirmRef = useRef(onConfirm);
+  onConfirmRef.current = onConfirm;
 
   const pan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
+      // Claim the gesture immediately so nothing above (scroll / nav) can steal it.
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_e, g) => {
-        const v = Math.max(0, Math.min(maxXRef.current, g.dx));
-        x.setValue(v);
+        if (confirmed.current) return;
+        x.setValue(Math.max(0, Math.min(maxXRef.current, g.dx)));
       },
       onPanResponderRelease: (_e, g) => {
-        if (g.dx >= maxXRef.current * 0.92 && !confirmed.current) {
+        const max = maxXRef.current;
+        if (g.dx >= max * 0.8 && !confirmed.current && max > 0) {
           confirmed.current = true;
-          Animated.timing(x, { toValue: maxXRef.current, duration: 80, useNativeDriver: false }).start(
-            () => onConfirmRef.current(),
+          setDone(true);
+          Animated.timing(x, { toValue: max, duration: 90, useNativeDriver: true }).start(() =>
+            onConfirmRef.current(),
           );
         } else {
-          Animated.spring(x, { toValue: 0, useNativeDriver: false }).start();
+          Animated.spring(x, { toValue: 0, useNativeDriver: true }).start();
         }
       },
     }),
   ).current;
 
-  // Keep latest values reachable from the stable PanResponder.
-  const maxXRef = useRef(maxX);
-  maxXRef.current = maxX;
-  const onConfirmRef = useRef(onConfirm);
-  onConfirmRef.current = onConfirm;
-
   const onLayout = (e: LayoutChangeEvent) => setTrackW(e.nativeEvent.layout.width);
 
   return (
     <View style={[styles.track, disabled && { opacity: 0.4 }]} onLayout={onLayout}>
-      <ThemedText type="smallBold" style={styles.label}>
-        {label}
-      </ThemedText>
-      <Animated.View style={[styles.thumb, { transform: [{ translateX: x }] }]} {...pan.panHandlers} />
+      <Txt variant="title" color={Brand.dim} center style={styles.label}>
+        {done ? 'Confirming…' : label}
+      </Txt>
+      <Animated.View
+        style={[styles.thumb, { transform: [{ translateX: x }] }]}
+        {...pan.panHandlers}>
+        <Txt variant="score" color={Brand.ctaText}>
+          ›
+        </Txt>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   track: {
-    height: THUMB + 8,
-    borderRadius: (THUMB + 8) / 2,
+    height: THUMB + PAD * 2,
+    borderRadius: (THUMB + PAD * 2) / 2,
     backgroundColor: Brand.surface,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  label: { color: Brand.dim, textAlign: 'center', fontSize: 16 },
+  label: { fontSize: 16 },
   thumb: {
     position: 'absolute',
-    left: 4,
-    top: 4,
+    left: PAD,
+    top: PAD,
     width: THUMB,
     height: THUMB,
     borderRadius: THUMB / 2,
     backgroundColor: Brand.cta,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -1,12 +1,9 @@
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SvgXml } from 'react-native-svg';
 
-import { logoWordmark } from '@/assets/figma-icons';
 import { Icon, type IconName } from '@/components/icon';
 import { Txt } from '@/components/txt';
 import { Brand, Radii } from '@/constants/theme';
@@ -62,13 +59,19 @@ function greeting() {
 function Header({ value, onAvatar }: { value: number | null; onAvatar: () => void }) {
   return (
     <View style={s.header}>
-      <SvgXml xml={logoWordmark} width={92} height={16} />
+      <Image
+        source={require('../../../assets/figma/logoWordmark.png')}
+        style={{ width: 92, height: 16 }}
+        contentFit="contain"
+      />
       <View style={s.headerRight}>
         <View style={s.balancePill}>
           <View style={s.coin} />
           <Txt variant="balance">{value == null ? '—' : fmtUsd(value)}</Txt>
           <View style={s.plusBtn}>
-            <Icon name="plus" size={12} />
+            <Txt variant="balance" color={Brand.white} style={{ lineHeight: 14 }}>
+              +
+            </Txt>
           </View>
         </View>
         <Pressable onPress={onAvatar} style={s.avatar} hitSlop={6}>
@@ -246,13 +249,7 @@ function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
       onPress={onPress}
       style={[s.card, live ? s.cardLive : s.cardIdle]}>
       {live && (
-        <LinearGradient
-          colors={['rgba(45,190,78,0.16)', 'rgba(45,190,78,0)']}
-          start={{ x: 1, y: 0 }}
-          end={{ x: 0.3, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(45,190,78,0.07)' }]} pointerEvents="none" />
       )}
       <View style={s.cardHeader}>
         <Txt variant="caps" color={Brand.offWhite} o={0.6} upper>

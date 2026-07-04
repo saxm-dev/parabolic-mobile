@@ -54,7 +54,8 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Brand.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="game/[id]" />
-        <Stack.Screen name="trade/[id]" options={{ presentation: 'modal' }} />
+        {/* Disable the swipe-back gesture: it competes with the slide-to-confirm. */}
+        <Stack.Screen name="trade/[id]" options={{ gestureEnabled: false }} />
       </Stack>
     </ThemeProvider>
   );

@@ -1,52 +1,38 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Text as SvgText } from 'react-native-svg';
 
+import { F } from '@/constants/theme';
 import { ThemedText } from '@/components/themed-text';
 import { Brand, Spacing } from '@/constants/theme';
 import { markWelcomeSeen } from '@/lib/auth';
 
-/** Tiled outlined-WIN backdrop with one big lime WIN, per Figma 63:1791. */
+/** Tiled "WIN" backdrop + one big lime WIN (Text, not SVG — Expo Go safe). */
 function WinPattern({ width, height }: { width: number; height: number }) {
-  const rows = Math.ceil(height / 110);
-  const cols = Math.ceil(width / 190) + 1;
+  const rows = Math.ceil(height / 100);
+  const cols = Math.ceil(width / 180) + 1;
   const tiles = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       tiles.push(
-        <SvgText
+        <Text
           key={`${r}-${c}`}
-          x={c * 190 - (r % 2 ? 95 : 0)}
-          y={r * 110 + 80}
-          fontSize={72}
-          fontWeight="800"
-          fontFamily="Arial, Helvetica, sans-serif"
-          stroke="rgba(255,255,255,0.07)"
-          strokeWidth={1.5}
-          fill="none"
-          letterSpacing={2}>
+          style={[
+            styles.tile,
+            { left: c * 180 - (r % 2 ? 90 : 0), top: r * 100 },
+          ]}>
           WIN
-        </SvgText>,
+        </Text>,
       );
     }
   }
   return (
-    <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {tiles}
-      <SvgText
-        x={width / 2}
-        y={height * 0.38}
-        fontSize={Math.min(150, width * 0.42)}
-        fontWeight="800"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fill={Brand.lime}
-        opacity={0.92}
-        textAnchor="middle"
-        letterSpacing={4}>
-        WIN
-      </SvgText>
-    </Svg>
+      <View style={styles.bigWinWrap}>
+        <Text style={[styles.bigWin, { fontSize: Math.min(160, width * 0.44) }]}>WIN</Text>
+      </View>
+    </View>
   );
 }
 
@@ -102,6 +88,24 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
+  tile: {
+    position: 'absolute',
+    fontFamily: F.bold,
+    fontSize: 68,
+    fontWeight: '800',
+    letterSpacing: 2,
+    color: 'rgba(255,255,255,0.05)',
+  },
+  bigWinWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigWin: { fontFamily: F.bold, fontWeight: '800', letterSpacing: 4, color: Brand.lime, opacity: 0.92 },
   safe: { flex: 1, paddingHorizontal: Spacing.three, gap: Spacing.three },
   card: {
     flex: 1,

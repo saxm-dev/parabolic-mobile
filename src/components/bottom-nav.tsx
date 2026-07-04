@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -41,10 +40,7 @@ export function BottomNav({ state, navigation }: NavProps) {
   };
 
   return (
-    <LinearGradient
-      colors={['rgba(7,7,7,0)', Brand.bg]}
-      style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 8) }]}
-      pointerEvents="box-none">
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
         <View style={styles.pill}>
           {PILL_ROUTES.map((r) => {
@@ -65,7 +61,7 @@ export function BottomNav({ state, navigation }: NavProps) {
           </View>
         </Pressable>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
