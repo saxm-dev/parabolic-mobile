@@ -22,7 +22,6 @@ const PAD_BOTTOM = 22;
 const PAD_LEFT = 6;
 const PAD_RIGHT = 54;
 const MIN_SPAN_MS = 30_000;
-const MIN_Y_RANGE = 0.12; // don't over-amplify a dead-flat game
 
 type Vp = { start: number; end: number };
 
@@ -147,39 +146,15 @@ export function ProbChart({
     const span = Math.max(1, vp.end - vp.start);
     const xFor = (t: number) => PAD_LEFT + ((t - vp.start) / span) * chartW;
 
-    // Auto-scale Y to the visible home-prob path + position lines (± padding),
-    // so balanced games amplify and nothing sits stranded in a corner.
-    const visible = pts.filter((h) => h.t >= vp.start && h.t <= vp.end);
-    const src = visible.length ? visible : pts;
-    const vals = src.map((h) => h.mp);
-    if (position) {
-      [position.entryPx, position.liqPrice, position.tp, position.sl].forEach((v) => {
-        if (v != null && v > 0 && v < 1) vals.push(v);
-      });
-    }
-    let yMin = Math.min(...vals);
-    let yMax = Math.max(...vals);
-    const pad = Math.max(0.03, (yMax - yMin) * 0.22);
-    yMin = Math.max(0, yMin - pad);
-    yMax = Math.min(1, yMax + pad);
-    if (yMax - yMin < MIN_Y_RANGE) {
-      const c = (yMax + yMin) / 2;
-      yMin = Math.max(0, c - MIN_Y_RANGE / 2);
-      yMax = Math.min(1, c + MIN_Y_RANGE / 2);
-    }
-    const yFor = (p: number) => PAD_TOP + (1 - (p - yMin) / (yMax - yMin)) * plotH;
+    // Fixed 0–100% probability axis (always the same reference frame).
+    const yFor = (p: number) => PAD_TOP + (1 - p) * plotH;
 
     const homePts = pts.map((h) => ({ x: xFor(h.t), y: yFor(h.mp) }));
     const awayPts = pts.map((h) => ({ x: xFor(h.t), y: yFor(1 - h.mp) }));
     const last = pts[pts.length - 1];
     const homePct = Math.round(last.mp * 100);
 
-    // Y gridlines at round % levels inside the visible range.
-    const gLo = Math.ceil((yMin * 100) / 10) * 10;
-    const gHi = Math.floor((yMax * 100) / 10) * 10;
-    const grid: number[] = [];
-    for (let v = gLo; v <= gHi; v += 10) grid.push(v / 100);
-    while (grid.length > 4) grid.splice(1, 1);
+    const grid = [0, 0.25, 0.5, 0.75, 1];
 
     const ticks = [0, 0.34, 0.67, 1].map((f) => ({
       x: PAD_LEFT + f * chartW,
@@ -190,7 +165,7 @@ export function ProbChart({
     const posLines: { y: number; color: string; label: string; dash?: string }[] = [];
     if (position) {
       const push = (val: number | null | undefined, color: string, label: string, dash?: string) => {
-        if (val == null || val <= yMin || val >= yMax) return;
+        if (val == null || val <= 0 || val >= 1) return;
         posLines.push({ y: yFor(val), color, label, dash });
       };
       push(position.entryPx, Brand.white, 'Entry');
