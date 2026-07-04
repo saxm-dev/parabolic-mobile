@@ -208,6 +208,8 @@ export default function GameDetailScreen() {
               awayAbbr={game.away.abbreviation}
               position={myPos}
               windowMs={tf === 'LIVE' ? null : TF_MS[tf]}
+              plays={game.plays ?? []}
+              league={game.league}
             />
 
             <View style={styles.tfRow}>
