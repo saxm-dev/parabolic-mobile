@@ -141,6 +141,22 @@ export async function fetchPositions(userId: string): Promise<Position[]> {
   return data.positions ?? [];
 }
 
+export interface ClosedTrade {
+  gameId: string;
+  side: 'home' | 'away';
+  pnl: number;
+  closedAt: number;
+}
+
+export async function fetchTrades(userId: string): Promise<ClosedTrade[]> {
+  try {
+    const data = await api<{ trades: ClosedTrade[] }>(`/profile/${userId}/trades`);
+    return data.trades ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export interface Play {
   id: string;
   text: string;

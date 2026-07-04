@@ -58,6 +58,7 @@ export default function RootLayout() {
           <Stack.Screen name="game/[id]" />
           {/* Disable the swipe-back gesture: it competes with the slide-to-confirm. */}
           <Stack.Screen name="trade/[id]" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </GestureHandlerRootView>
