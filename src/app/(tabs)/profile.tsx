@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -58,6 +58,14 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 }
 
 export default function ProfileScreen() {
+  const id = useIdentity();
+  if (!id.ready) return null;
+  // Guests don't have a profile — send them to the welcome page to sign up / log in.
+  if (!id.auth) return <Redirect href="/welcome" />;
+  return <ProfileContent />;
+}
+
+function ProfileContent() {
   const router = useRouter();
   const id = useIdentity();
   const { balance, positions, refresh } = useAccount(15_000);
@@ -125,16 +133,6 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
         </View>
-
-        {id.auth == null && (
-          <Pressable style={styles.claimBanner} onPress={() => router.push('/auth/signup')}>
-            <Sym name="sparkles" size={18} color={Brand.green} />
-            <Txt variant="label" color={Brand.white} style={{ flex: 1 }}>
-              Create an account to save your progress
-            </Txt>
-            <Sym name="chevron.right" size={16} color={Brand.dim} />
-          </Pressable>
-        )}
 
         {/* Performance */}
         <View style={styles.perfCard}>

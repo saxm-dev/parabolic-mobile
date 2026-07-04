@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,10 +53,14 @@ export default function WelcomeScreen() {
         <View style={styles.card}>
           <WinPattern width={width - Spacing.three * 2} height={height * 0.78} />
           <View style={styles.cardTop}>
-            <ThemedText style={styles.wordmark}>parabolic</ThemedText>
+            <Image
+              source={require('../../assets/figma/logoWordmark.png')}
+              style={{ width: 108, height: 19 }}
+              contentFit="contain"
+            />
             <Pressable onPress={() => done('home')} style={styles.skipPill} hitSlop={8}>
               <ThemedText type="smallBold" style={{ color: Brand.white }}>
-                Skip
+                Explore as guest
               </ThemedText>
             </Pressable>
           </View>
