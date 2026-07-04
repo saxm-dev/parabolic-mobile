@@ -203,11 +203,11 @@ export default function GameDetailScreen() {
             </View>
 
             <ProbChart
-              history={
-                tf === 'LIVE' ? history : history.filter((h) => h.t >= Date.now() - TF_MS[tf])
-              }
+              history={history}
               homeAbbr={game.home.abbreviation}
               awayAbbr={game.away.abbreviation}
+              position={myPos}
+              windowMs={tf === 'LIVE' ? null : TF_MS[tf]}
             />
 
             <View style={styles.tfRow}>

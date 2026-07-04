@@ -9,6 +9,7 @@ import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Brand } from '@/constants/theme';
@@ -48,15 +49,17 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <ThemeProvider value={ParabolicTheme}>
-      <StatusBar style="light" />
-      <AnimatedSplashOverlay />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Brand.bg } }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="game/[id]" />
-        {/* Disable the swipe-back gesture: it competes with the slide-to-confirm. */}
-        <Stack.Screen name="trade/[id]" options={{ gestureEnabled: false }} />
-      </Stack>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={ParabolicTheme}>
+        <StatusBar style="light" />
+        <AnimatedSplashOverlay />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Brand.bg } }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="game/[id]" />
+          {/* Disable the swipe-back gesture: it competes with the slide-to-confirm. */}
+          <Stack.Screen name="trade/[id]" options={{ gestureEnabled: false }} />
+        </Stack>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
